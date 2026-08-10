@@ -1,0 +1,151 @@
+---
+import type { TourIndexContext } from "@voyant-travel/theme"
+import {
+  availableCapability,
+  responseRows,
+  rowText,
+} from "../lib/tour-capabilities"
+
+interface Props {
+  context: TourIndexContext
+}
+
+const { context } = Astro.props
+const search = availableCapability(context.live, "catalog.search.v1")
+---
+
+<section class="tour-intro">
+  <p class="eyebrow">Field routes · Land journeys</p>
+  <h1>{context.title}</h1>
+  {context.seo.description && <p class="lede">{context.seo.description}</p>}
+</section>
+
+{
+  search && (
+    <form
+      class="tour-search"
+      data-tour-search
+      data-endpoint={search.endpoint}
+      data-locale={context.locale}
+    >
+      <label for="tour-query">Find a tour</label>
+      <div>
+        <input
+          id="tour-query"
+          name="query"
+          type="search"
+          autocomplete="off"
+          placeholder="Destination or experience"
+        />
+        <button type="submit">Search</button>
+      </div>
+      <p class="status" data-tour-search-status aria-live="polite"></p>
+      <ul class="tour-grid" data-tour-search-results hidden></ul>
+    </form>
+  )
+}
+
+<section aria-labelledby="published-tours">
+  <h2 id="published-tours">Featured tours</h2>
+  {
+    context.products.length === 0 ? (
+      <p>No tours are published yet.</p>
+    ) : (
+      <ul class="tour-grid">
+        {context.products.map((product) => (
+          <li>
+            <p class="eyebrow">
+              {product.destinations.map((destination) => destination.name).join(" · ")}
+            </p>
+            <h3>
+              <a href={`/tours/${encodeURIComponent(product.slug)}`}>
+                {product.name}
+              </a>
+            </h3>
+            {product.shortDescription && <p>{product.shortDescription}</p>}
+            <p class="meta">
+              {product.categories.map((category) => category.name).join(" · ")}
+            </p>
+          </li>
+        ))}
+      </ul>
+    )
+  }
+</section>
+
+<script>
+  import { responseRows, rowText } from "../lib/tour-capabilities"
+
+  const form = document.querySelector("[data-tour-search]")
+  if (form instanceof HTMLFormElement) {
+    const status = form.querySelector("[data-tour-search-status]")
+    const results = form.querySelector("[data-tour-search-results]")
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault()
+      if (!(status instanceof HTMLElement) || !(results instanceof HTMLUListElement)) return
+      const endpoint = form.dataset.endpoint
+      if (!endpoint) return
+      const data = new FormData(form)
+      const query = String(data.get("query") ?? "").trim()
+      const url = new URL(endpoint, window.location.origin)
+      if (query) url.searchParams.set("query", query)
+      if (form.dataset.locale) url.searchParams.set("locale", form.dataset.locale)
+      status.textContent = "Searching…"
+      results.hidden = true
+      try {
+        const response = await fetch(url, { headers: { Accept: "application/json" } })
+        if (!response.ok) throw new Error(`Search failed (${response.status})`)
+        const rows = responseRows(await response.json())
+        results.replaceChildren(
+          ...rows.map((row) => {
+            const item = document.createElement("li")
+            const heading = document.createElement("h3")
+            const id = rowText(row, "id", "productId")
+            const slug = rowText(row, "slug")
+            const name = rowText(row, "name", "title") ?? "Untitled tour"
+            if (slug) {
+              const link = document.createElement("a")
+              link.href = `/tours/${encodeURIComponent(slug)}`
+              link.textContent = name
+              heading.append(link)
+            } else {
+              heading.textContent = name
+            }
+            item.append(heading)
+            const summary = rowText(row, "shortDescription", "summary", "description")
+            if (summary) {
+              const copy = document.createElement("p")
+              copy.textContent = summary
+              item.append(copy)
+            }
+            if (!slug && id) item.dataset.productId = id
+            return item
+          }),
+        )
+        results.hidden = false
+        status.textContent = rows.length === 0 ? "No matching tours." : `${rows.length} tours found.`
+      } catch (error) {
+        status.textContent = error instanceof Error ? error.message : "Search is unavailable."
+      }
+    })
+  }
+</script>
+
+<style>
+  .tour-intro { margin: 0 0 4rem; max-width: 58rem; }
+  .tour-intro h1 { font-size: clamp(3.5rem, 11vw, 8rem); font-weight: 800; letter-spacing: -0.07em; line-height: 0.8; margin: 0.65rem 0 1.5rem; text-transform: uppercase; }
+  .eyebrow, .meta { color: var(--page-accent); font-size: 0.68rem; letter-spacing: 0.16em; text-transform: uppercase; }
+  .lede { font-size: 1.25rem; }
+  .tour-search { border: 1px solid color-mix(in srgb, var(--page-text) 25%, transparent); margin: 0 0 4rem; padding: 1.5rem; }
+  .tour-search label { display: block; font-weight: 650; margin-bottom: 0.5rem; }
+  .tour-search > div { display: flex; gap: 0.5rem; }
+  input { background: transparent; border: 0; border-bottom: 2px solid var(--page-accent); color: inherit; flex: 1; font: inherit; font-size: 1.2rem; padding: 0.75rem 0; }
+  button { background: var(--page-accent); border: 0; color: var(--page-background); cursor: pointer; font: inherit; font-weight: 800; padding: 0.75rem 1.25rem; text-transform: uppercase; }
+  .status { min-height: 1.5rem; }
+  .tour-grid { counter-reset: routes; display: grid; gap: 0; grid-template-columns: 1fr; list-style: none; margin: 1.25rem 0 0; padding: 0; }
+  .tour-grid li { border-top: 1px solid color-mix(in srgb, var(--page-text) 24%, transparent); counter-increment: routes; display: grid; grid-template-columns: 3rem minmax(12rem, 1fr) minmax(10rem, 2fr); padding: 1.2rem 0; }
+  .tour-grid li::before { color: var(--page-accent); content: counter(routes, decimal-leading-zero); font-size: 0.72rem; padding-top: 0.55rem; }
+  .tour-grid h3 { font-size: 1.45rem; margin: 0.35rem 1rem 0.75rem 0; }
+  .tour-grid p { margin: 0.5rem 0; }
+  @media (max-width: 620px) { .tour-grid li { grid-template-columns: 2.5rem 1fr; } .tour-grid li > p { grid-column: 2; } }
+</style>

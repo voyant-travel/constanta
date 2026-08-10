@@ -1,0 +1,235 @@
+---
+import CollectionValue from "../components/CollectionValue.astro"
+import CruisePage from "../components/CruisePage.astro"
+import HomeSections from "../components/sections/HomeSections.astro"
+import ShoppingExperience from "../components/ShoppingExperience.astro"
+import TourDetail from "../components/TourDetail.astro"
+import TourIndex from "../components/TourIndex.astro"
+import Layout from "../layouts/Layout.astro"
+import {
+  entryBlurb,
+  entryFields,
+} from "../lib/collection-values"
+import { sectionInstances } from "../lib/sections"
+import { capabilityEndpoint } from "../lib/shopping.mjs"
+import { resolveThemeContext } from "virtual:voyant-theme"
+
+// Context is resolved per request. On a published hostname it comes from the
+// immutable publication snapshot bound to this Worker; locally it falls back to
+// the fixtures in theme.config.ts. A partially configured runtime fails closed
+// rather than serving fixtures publicly.
+const context = await resolveThemeContext(Astro.url)
+if (context.kind === "notFound") Astro.response.status = 404
+
+const homeSections =
+  context.kind === "home"
+    ? sectionInstances(context.sections).filter((section) =>
+        ["hero", "feature-grid", "callout"].includes(section.type),
+      )
+    : []
+const live = "live" in context ? context.live : undefined
+const shoppingSearchEndpoint = capabilityEndpoint(
+  live,
+  "shopping.search.v1",
+  "POST",
+)
+const shoppingTripsEndpoint = capabilityEndpoint(
+  live,
+  "shopping.trip-selections.v1",
+  "PATCH",
+)
+const shoppingTripBookingEndpoint = capabilityEndpoint(
+  live,
+  "shopping.trip-booking.v1",
+  "POST",
+)
+const bookingEndpoint = capabilityEndpoint(live, "booking.session.v1", "PATCH")
+const checkoutEndpoint = capabilityEndpoint(live, "checkout.v1", "POST")
+
+// A listing shows the first text a reader can scan, so an index is not a wall
+// of bare titles. "First" follows the operator's declared order when the
+// collection publishes one, so the summary they put at the top is the summary
+// that appears; otherwise it falls back to sorted keys, which is the best
+// `values` alone can offer.
+
+---
+
+<Layout context={context} authoredHome={homeSections.length > 0}>
+  {context.kind === "home" && homeSections.length > 0 && (
+    <HomeSections sections={homeSections} />
+  )}
+  {context.kind === "home" && homeSections.length === 0 && <h1>{context.title}</h1>}
+  {context.kind === "home" && (
+    <ShoppingExperience
+      locale={context.locale}
+      searchEndpoint={shoppingSearchEndpoint}
+      tripsEndpoint={shoppingTripsEndpoint}
+      tripBookingEndpoint={shoppingTripBookingEndpoint}
+      bookingEndpoint={bookingEndpoint}
+      checkoutEndpoint={checkoutEndpoint}
+    />
+  )}
+  {["content", "notFound", "collectionIndex", "collectionEntry"].includes(
+    context.kind,
+  ) && <h1>{context.title}</h1>}
+  {context.kind === "content" && <p>{context.body}</p>}
+  {context.kind === "notFound" && <p>{context.message}</p>}
+  {context.kind === "tourIndex" && <TourIndex context={context} />}
+  {context.kind === "tourDetail" && <TourDetail context={context} />}
+  {(context.kind === "cruiseIndex" ||
+    context.kind === "cruiseDetail" ||
+    context.kind === "shipDetail" ||
+    context.kind === "sailingDetail") && (
+    <CruisePage context={context} />
+  )}
+  {context.kind === "cruiseIndex" && (
+    <ShoppingExperience
+      locale={context.locale}
+      searchEndpoint={shoppingSearchEndpoint}
+      tripsEndpoint={shoppingTripsEndpoint}
+      tripBookingEndpoint={shoppingTripBookingEndpoint}
+      bookingEndpoint={bookingEndpoint}
+      checkoutEndpoint={checkoutEndpoint}
+      initialKind="cruise"
+    />
+  )}
+
+  {
+    /*
+     * Dynamic lists the operator placed on this page. Distinct from a
+     * collection's own index: the collection need not be routable, so an entry
+     * here may legitimately have no page to link to.
+     */
+    "collectionLists" in context &&
+      context.collectionLists?.map((list) => (
+        <section class="collection-list">
+          {list.title && <h2>{list.title}</h2>}
+          {list.entries.length === 0 ? (
+            <p class="empty">Nothing published here yet.</p>
+          ) : (
+            <ul class="collection-index">
+              {list.entries.map((entry) => {
+                const summary = entryBlurb(entry, list.collection.fields)
+                return (
+                  <li>
+                    <h3>
+                      {entry.path ? (
+                        <a href={entry.path}>{entry.title}</a>
+                      ) : (
+                        entry.title
+                      )}
+                    </h3>
+                    {summary && <p>{summary}</p>}
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </section>
+      ))
+  }
+
+  {
+    context.kind === "collectionIndex" &&
+      (context.entries.length === 0 ? (
+        <p class="empty">Nothing published here yet.</p>
+      ) : (
+        <ul class="collection-index">
+          {context.entries.map((entry) => {
+            const summary = entryBlurb(entry, context.collection.fields)
+            return (
+              <li>
+                <h2>
+                  {entry.path ? (
+                    <a href={entry.path}>{entry.title}</a>
+                  ) : (
+                    entry.title
+                  )}
+                </h2>
+                {summary && <p>{summary}</p>}
+              </li>
+            )
+          })}
+        </ul>
+      ))
+  }
+
+  {
+    context.kind === "collectionEntry" && (
+      <>
+        <dl class="entry-fields">
+          {entryFields(context.entry.values, context.collection.fields).map((field) => (
+            <>
+              <dt>{field.label}</dt>
+              <dd>
+                <CollectionValue value={field.value} />
+              </dd>
+            </>
+          ))}
+        </dl>
+        <p class="back">
+          <a href={context.path.slice(0, context.path.lastIndexOf("/")) || "/"}>
+            Back to {context.collection.name}
+          </a>
+        </p>
+      </>
+    )
+  }
+</Layout>
+
+<style>
+  .collection-index {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 2rem;
+  }
+  .collection-index h2 {
+    margin: 0 0 0.35rem;
+    font-size: 1.25rem;
+  }
+  .collection-index h2 a {
+    text-decoration-color: color-mix(
+      in srgb,
+      var(--page-accent, #0b3d2e) 45%,
+      transparent
+    );
+  }
+  .collection-index p {
+    margin: 0;
+  }
+  .entry-fields {
+    display: grid;
+    grid-template-columns: minmax(6rem, 12rem) 1fr;
+    gap: 0.75rem 1.5rem;
+    margin: 0 0 2.5rem;
+  }
+  .entry-fields dt {
+    font-weight: 600;
+    color: color-mix(in srgb, var(--page-text, #12211a) 70%, transparent);
+  }
+  .entry-fields dd {
+    margin: 0;
+  }
+  .collection-list {
+    margin: 2.5rem 0;
+  }
+  .collection-list h2 {
+    font-size: 1.1rem;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--page-text, #12211a) 60%, transparent);
+    margin: 0 0 1rem;
+  }
+  .collection-list h3 {
+    margin: 0 0 0.35rem;
+    font-size: 1.15rem;
+  }
+  .empty {
+    color: color-mix(in srgb, var(--page-text, #12211a) 65%, transparent);
+  }
+  .back {
+    margin: 0;
+  }
+</style>

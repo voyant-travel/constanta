@@ -1,0 +1,21 @@
+---
+import type { SectionInstance } from "../../lib/sections"
+import Callout from "./Callout.astro"
+import FeatureGrid from "./FeatureGrid.astro"
+import Hero from "./Hero.astro"
+
+interface Props {
+  sections: SectionInstance[]
+}
+
+const { sections } = Astro.props
+---
+
+{
+  sections.map((section) => {
+    if (section.type === "hero") return <Hero section={section} />
+    if (section.type === "feature-grid") return <FeatureGrid section={section} />
+    if (section.type === "callout") return <Callout section={section} />
+    return null
+  })
+}

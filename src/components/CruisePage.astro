@@ -1,0 +1,173 @@
+---
+import type {
+  CruiseDetailContext,
+  CruiseIndexContext,
+  SailingDetailContext,
+  ShipDetailContext,
+} from "@voyant-travel/theme"
+
+interface Props {
+  context:
+    | CruiseIndexContext
+    | CruiseDetailContext
+    | ShipDetailContext
+    | SailingDetailContext
+}
+
+const { context } = Astro.props
+const cruise = context.kind === "cruiseDetail" ? context.cruise : undefined
+const ship = context.kind === "shipDetail" ? context.ship : undefined
+const sailing = context.kind === "sailingDetail" ? context.sailing : undefined
+---
+
+<article class="cruise-page">
+  {context.kind === "cruiseIndex" && (
+    <>
+      <p class="eyebrow">Voyage board · live coastlines</p>
+      <h1>{context.title}</h1>
+      {context.seo.description && <p class="lede">{context.seo.description}</p>}
+      {context.cruises.length === 0 ? (
+        <p>No cruise stories are published yet. Use the live search below for current sailings.</p>
+      ) : (
+        <ul class="cards">
+          {context.cruises.map((item) => (
+            <li>
+              {item.coverMedia && <img src={item.coverMedia.url} alt={item.coverMedia.altText ?? ""} />}
+              <h2><a href={`/cruises/${encodeURIComponent(item.slug)}`}>{item.name}</a></h2>
+              {item.shortDescription && <p>{item.shortDescription}</p>}
+              <p class="meta">Fleet {item.ships.length.toString().padStart(2, "0")} · Routes {item.sailings.length.toString().padStart(2, "0")}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  )}
+
+  {cruise && (
+    <>
+      <p class="eyebrow">Voyage dossier · Cruise</p>
+      <h1>{cruise.name}</h1>
+      {cruise.shortDescription && <p class="lede">{cruise.shortDescription}</p>}
+      {cruise.coverMedia && <img class="cover" src={cruise.coverMedia.url} alt={cruise.coverMedia.altText ?? ""} />}
+      {cruise.descriptionHtml && <section class="prose" set:html={cruise.descriptionHtml} />}
+      {cruise.ships.length > 0 && (
+        <section>
+          <h2>Ships</h2>
+          <ul class="cards compact">
+            {cruise.ships.map((item) => (
+              <li>
+                <h3><a href={`/ships/${encodeURIComponent(item.slug)}`}>{item.name}</a></h3>
+                {item.cruiseLine && <p>{item.cruiseLine}</p>}
+                <p class="meta">{item.cabinCategories.length} cabin categories</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {cruise.sailings.length > 0 && (
+        <section>
+          <h2>Published sailings</h2>
+          <ul class="cards compact">
+            {cruise.sailings.map((item) => (
+              <li>
+                <h3><a href={`/sailings/${encodeURIComponent(item.slug)}`}>{item.name}</a></h3>
+                <p>{item.departure.startsOn} → {item.departure.endsOn}</p>
+                <p class="meta">{item.departure.durationNights} nights · {item.departure.embarkationPort.name}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      <p class="back"><a href="/cruises">Back to cruises</a></p>
+    </>
+  )}
+
+  {ship && (
+    <>
+      <p class="eyebrow">{ship.cruiseLine ?? "Ship"}</p>
+      <h1>{ship.name}</h1>
+      {ship.coverMedia && <img class="cover" src={ship.coverMedia.url} alt={ship.coverMedia.altText ?? ""} />}
+      {ship.descriptionHtml && <section class="prose" set:html={ship.descriptionHtml} />}
+      <dl class="facts">
+        {ship.launchedYear && <div><dt>Launched</dt><dd>{ship.launchedYear}</dd></div>}
+        {ship.deckCount && <div><dt>Decks</dt><dd>{ship.deckCount}</dd></div>}
+      </dl>
+      <section>
+        <h2>Cabin categories</h2>
+        {ship.cabinCategories.length === 0 ? <p>Cabin details are coming soon.</p> : (
+          <ul class="cards compact">
+            {ship.cabinCategories.map((cabin) => (
+              <li>
+                <h3>{cabin.name}</h3>
+                {cabin.maxOccupancy && <p>Up to {cabin.maxOccupancy} guests</p>}
+                {cabin.deckNames.length > 0 && <p class="meta">{cabin.deckNames.join(" · ")}</p>}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+      <p class="back"><a href="/cruises">Browse cruises</a></p>
+    </>
+  )}
+
+  {sailing && (
+    <>
+      <p class="eyebrow">Departure log · Sailing</p>
+      <h1>{sailing.name}</h1>
+      <dl class="facts">
+        <div><dt>Dates</dt><dd>{sailing.departure.startsOn} → {sailing.departure.endsOn}</dd></div>
+        <div><dt>Duration</dt><dd>{sailing.departure.durationNights} nights</dd></div>
+        <div><dt>Embark</dt><dd>{sailing.departure.embarkationPort.name}</dd></div>
+        <div><dt>Disembark</dt><dd>{sailing.departure.disembarkationPort.name}</dd></div>
+      </dl>
+      <section>
+        <h2>{sailing.itinerary.name}</h2>
+        <ol class="itinerary">
+          {sailing.itinerary.days.map((day) => (
+            <li>
+              <p class="eyebrow">Day {day.dayNumber}</p>
+              <h3>{day.title}</h3>
+              {day.descriptionHtml && <div set:html={day.descriptionHtml} />}
+              {day.atSea ? <p class="meta">At sea</p> : day.ports.length > 0 && <p class="meta">{day.ports.map((port) => port.name).join(" · ")}</p>}
+            </li>
+          ))}
+        </ol>
+      </section>
+      <section>
+        <h2>Cabin categories</h2>
+        <ul class="cards compact">
+          {sailing.cabinCategories.map((cabin) => (
+            <li><h3>{cabin.name}</h3>{cabin.maxOccupancy && <p>Up to {cabin.maxOccupancy} guests</p>}</li>
+          ))}
+        </ul>
+      </section>
+      <p class="live-note">Current availability and presentation-currency pricing are resolved in live cruise search and can be added to one managed itinerary without copying supplier state into this page.</p>
+      <p class="back"><a href="/cruises">Find a live sailing</a></p>
+    </>
+  )}
+</article>
+
+<style>
+  .cruise-page { max-width: 82rem; }
+  .cruise-page > h1 { font-size: clamp(3.5rem, 11vw, 9rem); font-weight: 800; letter-spacing: -0.075em; line-height: 0.78; margin: 0.6rem 0 2rem; max-width: 10ch; text-transform: uppercase; }
+  .eyebrow, .meta { color: var(--page-accent); font-size: 0.68rem; letter-spacing: 0.16em; text-transform: uppercase; }
+  .lede { border-left: 4px solid var(--page-accent); font-size: 1.25rem; margin: 2rem 0; max-width: 42rem; padding-left: 1rem; }
+  .cover { aspect-ratio: 21 / 8; filter: saturate(0.72) contrast(1.06); margin: 2.5rem 0; object-fit: cover; width: 100%; }
+  section { margin: 4rem 0; }
+  section > h2 { font-size: 0.78rem; letter-spacing: 0.15em; text-transform: uppercase; }
+  .cards { display: grid; gap: 0; grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr)); list-style: none; margin: 2rem 0; padding: 0; }
+  .cards li { border-left: 1px solid color-mix(in srgb, var(--page-text) 25%, transparent); border-top: 1px solid color-mix(in srgb, var(--page-text) 25%, transparent); min-height: 15rem; padding: 1.5rem; position: relative; }
+  .cards li::after { color: color-mix(in srgb, var(--page-text) 30%, transparent); content: "↗"; position: absolute; right: 1rem; top: 0.8rem; }
+  .cards img { aspect-ratio: 16 / 9; filter: grayscale(0.25); margin: -1.5rem -1.5rem 1.2rem; object-fit: cover; width: calc(100% + 3rem); }
+  .cards h2, .cards h3 { font-size: 1.55rem; font-weight: 500; line-height: 1.05; margin: 0.5rem 2rem 0.8rem 0; }
+  .compact { grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); }
+  .facts { border-block: 1px solid color-mix(in srgb, var(--page-text) 25%, transparent); display: grid; gap: 0; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); margin: 3rem 0; }
+  .facts div { border-right: 1px solid color-mix(in srgb, var(--page-text) 20%, transparent); display: grid; gap: 0.45rem; padding: 1.25rem; }
+  dt { color: var(--page-accent); font-size: 0.64rem; letter-spacing: 0.12em; text-transform: uppercase; }
+  dd { font-size: 1.05rem; margin: 0; }
+  .itinerary { display: grid; gap: 0; grid-auto-columns: minmax(15rem, 1fr); grid-auto-flow: column; list-style: none; margin-inline: 0; overflow-x: auto; padding: 0 0 1rem; }
+  .itinerary li { border-left: 1px solid color-mix(in srgb, var(--page-text) 25%, transparent); min-height: 17rem; padding: 1.25rem; }
+  .itinerary li:nth-child(even) { background: color-mix(in srgb, var(--page-accent) 5%, transparent); }
+  .live-note { background: var(--page-accent); color: var(--page-background); font-weight: 700; padding: 1.5rem; }
+  .back { border-top: 1px solid color-mix(in srgb, var(--page-text) 25%, transparent); margin-top: 4rem; padding-top: 1rem; }
+</style>

@@ -1,0 +1,300 @@
+---
+import { messagesFor } from "../lib/shopping.mjs"
+import BookingJourney from "./BookingJourney.astro"
+
+interface Props {
+  locale: string
+  searchEndpoint?: string
+  tripsEndpoint?: string
+  tripBookingEndpoint?: string
+  bookingEndpoint?: string
+  checkoutEndpoint?: string
+  initialKind?: "indexed-inspiration" | "stay" | "flight" | "package" | "cruise"
+}
+
+const {
+  locale,
+  searchEndpoint,
+  tripsEndpoint,
+  tripBookingEndpoint,
+  bookingEndpoint,
+  checkoutEndpoint,
+  initialKind = "indexed-inspiration",
+} = Astro.props
+const copy = messagesFor(locale)
+---
+
+<section
+  class="shopping"
+  data-shopping
+  data-locale={locale}
+  data-search-endpoint={searchEndpoint}
+  data-trips-endpoint={tripsEndpoint}
+  data-trip-booking-endpoint={tripBookingEndpoint}
+  aria-labelledby="shopping-heading"
+>
+  <header class="shopping-intro">
+    <p class="eyebrow" data-i18n="shoppingEyebrow">{copy.shoppingEyebrow}</p>
+    <h2 id="shopping-heading" data-i18n="shoppingHeading">{copy.shoppingHeading}</h2>
+    <p data-i18n="shoppingIntro">{copy.shoppingIntro}</p>
+  </header>
+
+  <div class="scope" aria-label="Shopping preferences">
+    <label>
+      <span data-i18n="language">{copy.language}</span>
+      <select id="shopping-locale" name="shoppingLocale" data-shopping-locale aria-describedby="shopping-scope-status">
+        <option value={locale}>{locale}</option>
+      </select>
+    </label>
+    <label>
+      <span data-i18n="currency">{copy.currency}</span>
+      <select id="shopping-currency" name="shoppingCurrency" data-shopping-currency aria-describedby="shopping-scope-status" disabled>
+        <option value="">—</option>
+      </select>
+    </label>
+    <p id="shopping-scope-status" class="visually-hidden" data-scope-status aria-live="polite"></p>
+  </div>
+
+  <div class="workspace">
+    <div class="search-panel">
+      <form data-shopping-form>
+        <label class="kind">
+          <span data-i18n="productType">{copy.productType}</span>
+          <select name="kind" data-shopping-kind>
+            <option value="indexed-inspiration" data-i18n="explore" selected={initialKind === "indexed-inspiration"}>{copy.explore}</option>
+            <option value="stay" data-i18n="stays" selected={initialKind === "stay"}>{copy.stays}</option>
+            <option value="flight" data-i18n="flights" selected={initialKind === "flight"}>{copy.flights}</option>
+            <option value="package" data-i18n="packages" selected={initialKind === "package"}>{copy.packages}</option>
+            <option value="cruise" data-i18n="cruises" selected={initialKind === "cruise"}>{copy.cruises}</option>
+          </select>
+        </label>
+
+        <fieldset data-intent="indexed-inspiration">
+          <legend class="visually-hidden" data-i18n="explore">{copy.explore}</legend>
+          <label class="wide">
+            <span data-i18n="keywords">{copy.keywords}</span>
+            <input name="query" type="search" autocomplete="off" />
+          </label>
+          <label class="wide">
+            <span data-i18n="destination">{copy.destination}</span>
+            <input name="inspirationDestination" autocomplete="address-level2" />
+          </label>
+          <label>
+            <span data-i18n="fromDate">{copy.fromDate}</span>
+            <input name="fromDate" type="date" />
+          </label>
+          <label>
+            <span data-i18n="toDate">{copy.toDate}</span>
+            <input name="toDate" type="date" />
+          </label>
+        </fieldset>
+
+        <fieldset data-intent="stay" hidden disabled>
+          <legend class="visually-hidden" data-i18n="stays">{copy.stays}</legend>
+          <label class="wide">
+            <span data-i18n="destination">{copy.destination}</span>
+            <input name="stayDestination" autocomplete="address-level2" required />
+          </label>
+          <label>
+            <span data-i18n="checkIn">{copy.checkIn}</span>
+            <input name="checkIn" type="date" required />
+          </label>
+          <label>
+            <span data-i18n="checkOut">{copy.checkOut}</span>
+            <input name="checkOut" type="date" required />
+          </label>
+          <label>
+            <span data-i18n="adults">{copy.adults}</span>
+            <input name="stayAdults" type="number" min="1" max="20" value="2" required />
+          </label>
+        </fieldset>
+
+        <fieldset data-intent="flight" hidden disabled>
+          <legend class="visually-hidden" data-i18n="flights">{copy.flights}</legend>
+          <label>
+            <span data-i18n="origin">{copy.origin}</span>
+            <input name="flightOrigin" minlength="3" maxlength="3" autocomplete="off" required />
+          </label>
+          <label>
+            <span data-i18n="flightDestination">{copy.flightDestination}</span>
+            <input name="flightDestination" minlength="3" maxlength="3" autocomplete="off" required />
+          </label>
+          <label>
+            <span data-i18n="departureDate">{copy.departureDate}</span>
+            <input name="departureDate" type="date" required />
+          </label>
+          <label>
+            <span data-i18n="adults">{copy.adults}</span>
+            <input name="flightAdults" type="number" min="1" max="20" value="1" required />
+          </label>
+          <label>
+            <span data-i18n="cabin">{copy.cabin}</span>
+            <select name="cabin">
+              <option value="economy" data-i18n="economy">{copy.economy}</option>
+              <option value="premium_economy" data-i18n="premium_economy">{copy.premium_economy}</option>
+              <option value="business" data-i18n="business">{copy.business}</option>
+              <option value="first" data-i18n="first">{copy.first}</option>
+            </select>
+          </label>
+          <label class="check">
+            <input name="directOnly" type="checkbox" />
+            <span data-i18n="directOnly">{copy.directOnly}</span>
+          </label>
+        </fieldset>
+
+        <fieldset data-intent="package" hidden disabled>
+          <legend class="visually-hidden" data-i18n="packages">{copy.packages}</legend>
+          <label>
+            <span data-i18n="origin">{copy.origin}</span>
+            <input name="packageOrigin" minlength="3" maxlength="3" autocomplete="off" required />
+          </label>
+          <label>
+            <span data-i18n="destination">{copy.destination}</span>
+            <input name="packageDestination" autocomplete="address-level2" required />
+          </label>
+          <label>
+            <span data-i18n="fromDate">{copy.fromDate}</span>
+            <input name="packageFrom" type="date" required />
+          </label>
+          <label>
+            <span data-i18n="toDate">{copy.toDate}</span>
+            <input name="packageTo" type="date" required />
+          </label>
+          <label>
+            <span data-i18n="nightsMin">{copy.nightsMin}</span>
+            <input name="nightsMin" type="number" min="1" value="3" required />
+          </label>
+          <label>
+            <span data-i18n="nightsMax">{copy.nightsMax}</span>
+            <input name="nightsMax" type="number" min="1" value="7" required />
+          </label>
+          <label>
+            <span data-i18n="adults">{copy.adults}</span>
+            <input name="packageAdults" type="number" min="1" max="20" value="2" required />
+          </label>
+        </fieldset>
+
+        <fieldset data-intent="cruise" hidden disabled>
+          <legend class="visually-hidden" data-i18n="cruises">{copy.cruises}</legend>
+          <label class="wide">
+            <span data-i18n="keywords">{copy.keywords}</span>
+            <input name="cruiseQuery" type="search" autocomplete="off" />
+          </label>
+          <label>
+            <span data-i18n="fromDate">{copy.fromDate}</span>
+            <input name="cruiseFrom" type="date" />
+          </label>
+          <label>
+            <span data-i18n="toDate">{copy.toDate}</span>
+            <input name="cruiseTo" type="date" />
+          </label>
+          <label>
+            <span data-i18n="adults">{copy.adults}</span>
+            <input name="cruiseAdults" type="number" min="1" max="20" value="2" required />
+          </label>
+          <label>
+            <span data-i18n="children">{copy.children}</span>
+            <input name="cruiseChildren" type="number" min="0" max="20" value="0" />
+          </label>
+          <label class="wide">
+            <span data-i18n="cruiseType">{copy.cruiseType}</span>
+            <select name="cruiseType">
+              <option value="" data-i18n="anyCruiseType">{copy.anyCruiseType}</option>
+              <option value="ocean" data-i18n="oceanCruise">{copy.oceanCruise}</option>
+              <option value="river" data-i18n="riverCruise">{copy.riverCruise}</option>
+              <option value="expedition" data-i18n="expeditionCruise">{copy.expeditionCruise}</option>
+              <option value="coastal" data-i18n="coastalCruise">{copy.coastalCruise}</option>
+            </select>
+          </label>
+        </fieldset>
+
+        <button type="submit" data-shopping-submit disabled={!searchEndpoint}>
+          <span data-i18n="search">{copy.search}</span>
+        </button>
+      </form>
+
+      <p class="status" data-shopping-status role="status" aria-live="polite">
+        {!searchEndpoint && copy.unavailable}
+      </p>
+      <section class="results" data-shopping-results hidden aria-labelledby="shopping-results-heading">
+        <h3 id="shopping-results-heading" data-i18n="results">{copy.results}</h3>
+        <div data-result-groups></div>
+      </section>
+    </div>
+
+    <aside class="trip" aria-labelledby="shopping-trip-heading">
+      <p class="eyebrow">Trips</p>
+      <h3 id="shopping-trip-heading" data-i18n="tripHeading">{copy.tripHeading}</h3>
+      <p data-i18n="tripIntro">{copy.tripIntro}</p>
+      <p class="trip-status" data-trip-status role="status" aria-live="polite"></p>
+      <ol data-trip-items></ol>
+      <p data-trip-empty data-i18n="emptyTrip">{copy.emptyTrip}</p>
+      <button type="button" data-trip-book disabled={!tripBookingEndpoint || !bookingEndpoint}>
+        <span data-i18n="bookItinerary">{copy.bookItinerary}</span>
+      </button>
+      {bookingEndpoint && (
+        <BookingJourney
+          mode="itinerary"
+          locale={locale}
+          bookingEndpoint={bookingEndpoint}
+          checkoutEndpoint={checkoutEndpoint}
+        />
+      )}
+    </aside>
+  </div>
+</section>
+
+<script>
+  import { mountShopping } from "../lib/shopping-ui.mjs"
+
+  for (const root of document.querySelectorAll("[data-shopping]")) {
+    if (root instanceof HTMLElement) mountShopping(root)
+  }
+</script>
+
+<style>
+  .shopping { margin: 0 auto; max-width: 76rem; padding: clamp(3rem, 8vw, 7rem) 2rem; }
+  .shopping-intro { max-width: 47rem; }
+  .shopping-intro h2 { font-size: clamp(2.4rem, 6vw, 4.8rem); letter-spacing: -0.045em; line-height: 0.96; margin: 0.4rem 0 1rem; }
+  .shopping-intro > p:last-child { font-size: 1.15rem; max-width: 42rem; }
+  .eyebrow { color: color-mix(in srgb, var(--page-text) 62%, transparent); font-size: 0.76rem; letter-spacing: 0.13em; margin: 0; text-transform: uppercase; }
+  .scope { align-items: end; border-block: 1px solid color-mix(in srgb, var(--page-text) 15%, transparent); display: flex; flex-wrap: wrap; gap: 1rem; margin: 2.5rem 0; padding: 1rem 0; }
+  .scope label { min-width: 10rem; }
+  .workspace { display: grid; gap: clamp(2rem, 5vw, 5rem); grid-template-columns: minmax(0, 2fr) minmax(17rem, 1fr); }
+  form { display: grid; gap: 1.25rem; }
+  label { display: grid; font-size: 0.87rem; font-weight: 650; gap: 0.35rem; }
+  fieldset { border: 0; display: grid; gap: 1rem; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; padding: 0; }
+  fieldset[hidden] { display: none; }
+  .wide { grid-column: 1 / -1; }
+  .check { align-items: center; display: flex; font-weight: 500; margin-top: 1.45rem; }
+  input, select { background: var(--page-background); border: 1px solid color-mix(in srgb, var(--page-text) 28%, transparent); border-radius: 0; color: inherit; font: inherit; min-height: 2.85rem; padding: 0.6rem 0.7rem; }
+  .check input { min-height: auto; }
+  button { background: var(--page-accent); border: 1px solid var(--page-accent); color: white; cursor: pointer; font: inherit; font-weight: 650; justify-self: start; padding: 0.72rem 1rem; }
+  button:disabled { cursor: not-allowed; opacity: 0.5; }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid color-mix(in srgb, var(--page-accent) 38%, transparent); outline-offset: 2px; }
+  .status, .trip-status { min-height: 1.5rem; }
+  .results h3, .trip h3 { font-size: 1.45rem; margin: 0.35rem 0 1rem; }
+  .trip { border-left: 1px solid color-mix(in srgb, var(--page-text) 15%, transparent); padding-left: 1.5rem; }
+  .trip ol { display: grid; gap: 0.75rem; list-style: none; margin: 1rem 0; padding: 0; }
+  :global(.result-group) { margin-top: 2.5rem; }
+  :global(.result-group > h4) { font-size: 0.8rem; letter-spacing: 0.12em; text-transform: uppercase; }
+  :global(.result-grid) { display: grid; gap: 1px; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); list-style: none; margin: 0; padding: 0; background: color-mix(in srgb, var(--page-text) 14%, transparent); }
+  :global(.result-card) { background: var(--page-background); display: flex; flex-direction: column; min-height: 12rem; padding: 1.15rem; }
+  :global(.result-card img) { aspect-ratio: 16 / 9; margin: -1.15rem -1.15rem 1rem; object-fit: cover; width: calc(100% + 2.3rem); }
+  :global(.result-card h5) { font-size: 1.1rem; margin: 0 0 0.5rem; }
+  :global(.result-card p) { margin: 0 0 0.8rem; }
+  :global(.result-card .price) { font-weight: 700; margin-top: auto; }
+  :global(.result-card button) { margin-top: 0.75rem; }
+  :global(.trip-item) { border: 1px solid color-mix(in srgb, var(--page-text) 18%, transparent); padding: 0.8rem; }
+  :global(.trip-item p) { font-weight: 650; margin: 0 0 0.6rem; text-transform: capitalize; }
+  :global(.trip-actions) { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+  :global(.trip-actions button) { background: transparent; color: var(--page-accent); font-size: 0.8rem; padding: 0.35rem 0.5rem; }
+  :global(.trip .booking-journey) { margin-top: 1.25rem; }
+  .visually-hidden { clip: rect(0 0 0 0); clip-path: inset(50%); height: 1px; overflow: hidden; position: absolute; white-space: nowrap; width: 1px; }
+  @media (max-width: 48rem) {
+    .workspace { grid-template-columns: 1fr; }
+    .trip { border-left: 0; border-top: 1px solid color-mix(in srgb, var(--page-text) 15%, transparent); padding: 1.5rem 0 0; }
+    fieldset { grid-template-columns: 1fr; }
+    .wide { grid-column: auto; }
+  }
+</style>

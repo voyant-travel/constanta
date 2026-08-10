@@ -1,0 +1,48 @@
+---
+import type { CollectionValue } from "../lib/collection-values"
+
+interface Props {
+  value: CollectionValue
+}
+
+const { value } = Astro.props
+---
+
+{value.kind === "text" && <span>{value.text}</span>}
+{
+  value.kind === "image" && (
+    <img src={value.image.src} alt={value.image.alt} loading="lazy" />
+  )
+}
+{
+  value.kind === "reference" &&
+    (value.reference.path ? (
+      <a href={value.reference.path}>{value.reference.title}</a>
+    ) : (
+      <span>{value.reference.title}</span>
+    ))
+}
+{
+  value.kind === "list" && (
+    <ul class="value-list">
+      {value.items.map((item) => (
+        <li>
+          <Astro.self value={item} />
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+<style>
+  img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    border-radius: 0.5rem;
+  }
+  .value-list {
+    margin: 0;
+    padding-left: 1.1rem;
+  }
+</style>

@@ -1,0 +1,289 @@
+---
+interface Props {
+  productId?: string
+  locale: string
+  bookingEndpoint: string
+  checkoutEndpoint?: string
+  mode?: "product" | "itinerary"
+}
+
+const {
+  productId,
+  locale,
+  bookingEndpoint,
+  checkoutEndpoint,
+  mode = "product",
+} = Astro.props
+const itinerary = mode === "itinerary"
+---
+
+<section
+  class="booking-journey"
+  data-booking-journey
+  data-product-id={productId}
+  data-locale={locale}
+  data-booking-endpoint={bookingEndpoint}
+  data-checkout-endpoint={checkoutEndpoint}
+  data-booking-mode={mode}
+  hidden={itinerary}
+  aria-labelledby="booking-heading"
+>
+  <p class="eyebrow">{itinerary ? "Secure itinerary booking" : "Secure live booking"}</p>
+  <h2 id="booking-heading">{itinerary ? "Book everything together" : "Build your booking"}</h2>
+  <p>
+    Dates, prices, holds, and checkout are resolved live. They are not stored in
+    this published page.
+  </p>
+
+  <form data-booking-form>
+    <div class="fields">
+      {!itinerary && (
+        <label>
+          Departure reference
+          <input name="departureSlotId" autocomplete="off" required />
+          <span>Choose a live date above or enter its reference.</span>
+        </label>
+      )}
+      <label>
+        Adults
+        <input name="adults" type="number" min="1" max="20" value="1" required />
+      </label>
+      <label>
+        First name
+        <input name="firstName" autocomplete="given-name" />
+      </label>
+      <label>
+        Last name
+        <input name="lastName" autocomplete="family-name" />
+      </label>
+      <label class="wide">
+        Email
+        <input name="email" type="email" autocomplete="email" />
+      </label>
+    </div>
+
+    <div class="actions" aria-label="Booking steps">
+      {!itinerary && <button type="submit" data-action="create">Start booking</button>}
+      <button type="button" class="secondary" data-action="update" disabled>Update details</button>
+      <button type="button" class="secondary" data-action="quote" disabled>Get binding quote</button>
+      <button type="button" class="secondary" data-action="hold" disabled>Hold one place</button>
+      <button type="button" data-action="commit" disabled>Continue to checkout</button>
+    </div>
+    <fieldset data-payment-intents hidden>
+      <legend>How would you like to continue?</legend>
+      <label><input type="radio" name="paymentIntent" value="card" checked /> Card</label>
+      <label><input type="radio" name="paymentIntent" value="bank_transfer" /> Bank transfer</label>
+      <label><input type="radio" name="paymentIntent" value="inquiry" /> Send an inquiry</label>
+    </fieldset>
+  </form>
+
+  <div class="session-tools" data-session-tools hidden>
+    <button type="button" class="link" data-action="renew">Keep session active</button>
+    <button type="button" class="link danger" data-action="abandon">Abandon booking</button>
+  </div>
+
+  <p class="status" data-booking-status role="status" aria-live="polite"></p>
+  <p class="error" data-booking-error role="alert" hidden></p>
+  <dl class="live-state" data-live-state hidden>
+    <div><dt>Session</dt><dd data-state-session>Not started</dd></div>
+    <div><dt>State</dt><dd data-state-kind>Waiting</dd></div>
+    <div><dt>Revision</dt><dd data-state-revision>—</dd></div>
+    <div><dt>Quote</dt><dd data-state-quote>—</dd></div>
+    <div><dt>Hold</dt><dd data-state-hold>—</dd></div>
+  </dl>
+  <p data-checkout-handoff hidden>
+    Your secure checkout is ready.
+    <a rel="nofollow noopener" data-checkout-link>Open secure checkout</a>
+  </p>
+  <button type="button" class="secondary" data-action="checkout" hidden>
+    Prepare checkout handoff
+  </button>
+</section>
+
+<script>
+  import {
+    createBookingJourney,
+    offeredPaymentIntents,
+    readableCode,
+    selectionFromForm,
+  } from "../lib/booking-journey.mjs"
+
+  for (const root of document.querySelectorAll("[data-booking-journey]")) {
+    if (!(root instanceof HTMLElement)) continue
+    const form = root.querySelector("[data-booking-form]")
+    const status = root.querySelector("[data-booking-status]")
+    const error = root.querySelector("[data-booking-error]")
+    const stateView = root.querySelector("[data-live-state]")
+    const tools = root.querySelector("[data-session-tools]")
+    const paymentIntents = root.querySelector("[data-payment-intents]")
+    const checkoutButton = root.querySelector('[data-action="checkout"]')
+    const handoff = root.querySelector("[data-checkout-handoff]")
+    const handoffLink = root.querySelector("[data-checkout-link]")
+    const bookingEndpoint = root.dataset.bookingEndpoint
+    const productId = root.dataset.productId
+    if (form instanceof HTMLFormElement && bookingEndpoint) {
+      let journey = productId
+        ? createBookingJourney({
+            endpoint: bookingEndpoint,
+            checkoutEndpoint: root.dataset.checkoutEndpoint,
+            productId,
+          })
+        : undefined
+      let lastPayload
+      let inFlight = false
+
+      const button = (action) => root.querySelector(`[data-action="${action}"]`)
+      const selectedIntent = () => {
+        const selected = form.querySelector('input[name="paymentIntent"]:checked')
+        return selected instanceof HTMLInputElement ? selected.value : "card"
+      }
+      const setText = (selector, value) => {
+        const node = root.querySelector(selector)
+        if (node instanceof HTMLElement) node.textContent = value
+      }
+      const render = (state) => {
+        const terminal = state.sessionState === "abandoned" || Boolean(state.commitOutcome)
+        if (stateView instanceof HTMLElement) stateView.hidden = !state.sessionId
+        if (tools instanceof HTMLElement) tools.hidden = !state.sessionId || terminal
+        setText("[data-state-session]", state.sessionId ?? "Not started")
+        setText("[data-state-kind]", readableCode(state.commitOutcome ?? state.lastOutcome ?? state.sessionState ?? "waiting"))
+        setText("[data-state-revision]", state.revision === undefined ? "—" : String(state.revision))
+        setText("[data-state-quote]", state.quoteId ?? "—")
+        setText("[data-state-hold]", state.holdId ?? "—")
+        if (button("create") instanceof HTMLButtonElement) button("create").disabled = Boolean(state.sessionId) && !terminal
+        if (button("update") instanceof HTMLButtonElement) button("update").disabled = !state.sessionId || terminal
+        if (button("quote") instanceof HTMLButtonElement) button("quote").disabled = !state.sessionId || terminal
+        if (button("hold") instanceof HTMLButtonElement) button("hold").disabled = !state.quoteId || terminal
+        if (button("commit") instanceof HTMLButtonElement) button("commit").disabled = !state.quoteId || !state.requirementsFingerprint || terminal
+        if (paymentIntents instanceof HTMLFieldSetElement) paymentIntents.hidden = !state.quoteId || terminal
+        if (state.handoff && handoff instanceof HTMLElement && handoffLink instanceof HTMLAnchorElement) {
+          handoff.hidden = false
+          handoffLink.href = state.handoff.url
+        }
+        const needsCheckout = state.commitOutcome === "payment_required" && !state.handoff && root.dataset.checkoutEndpoint
+        if (checkoutButton instanceof HTMLButtonElement) checkoutButton.hidden = !needsCheckout
+      }
+
+      const run = async (action) => {
+        if (
+          inFlight ||
+          !journey ||
+          !(status instanceof HTMLElement) ||
+          !(error instanceof HTMLElement)
+        ) return
+        inFlight = true
+        error.hidden = true
+        status.textContent = `${readableCode(action)} in progress…`
+        root.setAttribute("aria-busy", "true")
+        const selection = selectionFromForm(form)
+        const paymentIntent = selectedIntent()
+        try {
+          const payment = {
+            returnUrl: `${window.location.origin}${window.location.pathname}?checkout=return`,
+            cancelUrl: window.location.href,
+            acceptedCheckoutHandoffs: ["redirect"],
+          }
+          const result = await journey.perform(action, {
+            selection,
+            paymentIntent,
+            payment,
+            quantity: Number.parseInt(String(new FormData(form).get("adults") ?? "1"), 10) || 1,
+          })
+          lastPayload = result.payload
+          render(result.state)
+          const offered = offeredPaymentIntents(lastPayload)
+          if (offered.length > 0) {
+            for (const input of form.querySelectorAll('input[name="paymentIntent"]')) {
+              if (input instanceof HTMLInputElement) input.disabled = !offered.includes(input.value)
+            }
+          }
+          if (result.state.rejection) {
+            error.textContent = `${readableCode(result.state.rejection)}. The live session was not advanced.`
+            error.hidden = false
+            status.textContent = result.state.rejection === "revision_conflict"
+              ? "The session changed elsewhere. Its latest revision is loaded; review and try again."
+              : "Review the live response and adjust your booking."
+          } else {
+            status.textContent = `${readableCode(result.state.lastOutcome)}.`
+          }
+        } catch (caught) {
+          error.textContent = caught instanceof Error ? caught.message : "Live booking is temporarily unavailable."
+          error.hidden = false
+          status.textContent = "Nothing was changed. Retry this action when ready."
+        } finally {
+          inFlight = false
+          root.removeAttribute("aria-busy")
+        }
+      }
+
+      form.addEventListener("submit", (event) => {
+        event.preventDefault()
+        if (journey) void run("create")
+      })
+      for (const control of root.querySelectorAll("[data-action]")) {
+        if (!(control instanceof HTMLButtonElement) || control.type === "submit") continue
+        control.addEventListener("click", () => void run(control.dataset.action))
+      }
+      document.addEventListener("voyant:departure-selected", (event) => {
+        const departure = event instanceof CustomEvent ? event.detail?.departureSlotId : undefined
+        const input = form.elements.namedItem("departureSlotId")
+        if (typeof departure === "string" && input instanceof HTMLInputElement) {
+          input.value = departure
+          input.focus()
+          if (status instanceof HTMLElement) status.textContent = "Departure selected. Add traveler details to start."
+        }
+      })
+      root.addEventListener("voyant:itinerary-session-created", (event) => {
+        if (!(event instanceof CustomEvent) || root.dataset.bookingMode !== "itinerary") return
+        const outcome = event.detail?.outcome
+        try {
+          journey = createBookingJourney({
+            endpoint: bookingEndpoint,
+            checkoutEndpoint: root.dataset.checkoutEndpoint,
+            initialOutcome: outcome,
+            capability: event.detail?.bookingSessionCapability,
+          })
+          root.hidden = false
+          render(journey.state())
+          if (status instanceof HTMLElement) {
+            status.textContent = "Itinerary session created. Review traveler details, then get a binding quote."
+          }
+        } catch (caught) {
+          if (error instanceof HTMLElement) {
+            error.textContent = caught instanceof Error
+              ? caught.message
+              : "The managed itinerary session was invalid."
+            error.hidden = false
+          }
+        }
+      })
+    }
+  }
+</script>
+
+<style>
+  .booking-journey { background: color-mix(in srgb, var(--page-accent) 8%, var(--page-background)); border: 1px solid color-mix(in srgb, var(--page-accent) 28%, transparent); padding: 1.5rem; }
+  .booking-journey h2 { margin: 0.35rem 0; }
+  .fields { display: grid; gap: 1rem; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 1.5rem; }
+  .fields label { display: grid; font-weight: 650; gap: 0.35rem; }
+  .fields label span { font-size: 0.8rem; font-weight: 400; }
+  .fields .wide { grid-column: 1 / -1; }
+  input { background: var(--page-background); border: 1px solid color-mix(in srgb, var(--page-text) 30%, transparent); color: inherit; font: inherit; min-width: 0; padding: 0.7rem; }
+  fieldset { border: 0; display: flex; flex-wrap: wrap; gap: 1rem; margin: 1.25rem 0 0; padding: 0; }
+  fieldset[hidden] { display: none; }
+  legend { font-weight: 650; margin-bottom: 0.5rem; width: 100%; }
+  .actions, .session-tools { display: flex; flex-wrap: wrap; gap: 0.65rem; margin-top: 1.25rem; }
+  [hidden] { display: none !important; }
+  button { background: var(--page-accent); border: 1px solid var(--page-accent); color: white; cursor: pointer; font: inherit; font-weight: 650; padding: 0.7rem 1rem; }
+  button.secondary { background: transparent; color: var(--page-accent); }
+  button.link { background: transparent; border: 0; color: var(--page-accent); padding-inline: 0; text-decoration: underline; }
+  button.danger { color: #9f2929; }
+  button:disabled { cursor: not-allowed; opacity: 0.45; }
+  .status { min-height: 1.5rem; }
+  .error { border-inline-start: 3px solid #b42318; padding-inline-start: 0.75rem; }
+  .live-state { display: grid; gap: 0.5rem; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); }
+  .live-state div { min-width: 0; }
+  .live-state dt { font-size: 0.75rem; text-transform: uppercase; }
+  .live-state dd { margin: 0.2rem 0 0; overflow-wrap: anywhere; }
+  @media (max-width: 34rem) { .fields { grid-template-columns: 1fr; } .fields .wide { grid-column: auto; } }
+</style>

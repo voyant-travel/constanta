@@ -1,0 +1,202 @@
+---
+import { cleanStega, type ThemePageContext } from "@voyant-travel/theme"
+
+interface Props {
+  context: ThemePageContext
+  authoredHome?: boolean
+}
+
+const { context, authoredHome = false } = Astro.props
+// Authored SEO wins, because it is the one description an operator wrote on
+// purpose. A content page falls back to its own summary so a published page is
+// never indexed without one; a collection page has no equivalent prose to
+// borrow, and an invented description would be worse than none.
+const description =
+  context.seo.description ??
+  (context.kind === "content" ? context.summary : undefined)
+const documentTitle = cleanStega(context.seo.title)
+const metadataDescription = description ? cleanStega(description) : undefined
+const openGraphTitle = context.openGraph?.title
+  ? cleanStega(context.openGraph.title)
+  : undefined
+const openGraphDescription = context.openGraph?.description
+  ? cleanStega(context.openGraph.description)
+  : undefined
+const openGraphImageAlt = context.openGraph?.image?.alt
+  ? cleanStega(context.openGraph.image.alt)
+  : undefined
+
+/**
+ * Operator-chosen presentation, resolved to CSS custom properties.
+ *
+ * Every value is looked up against a table the theme owns rather than being
+ * written into the page. `settings` is operator input reaching a style
+ * attribute, so an unrecognized palette falls back instead of becoming CSS.
+ * The one free-text value, the accent colour, is matched against a strict
+ * colour pattern for the same reason.
+ */
+const PALETTES = {
+  forest: { background: "#071713", text: "#eaf5e8", accent: "#7ee0a3" },
+  ocean: { background: "#07151f", text: "#eef8fb", accent: "#63d5e8" },
+  sand: { background: "#1c160e", text: "#fff6de", accent: "#ffc766" },
+  ink: { background: "#0d0d0d", text: "#f5f3ed", accent: "#ff6b4a" },
+} as const
+
+const WIDTHS = {
+  narrow: "34rem",
+  regular: "44rem",
+  wide: "60rem",
+} as const
+
+function chosen<T extends Record<string, unknown>>(
+  table: T,
+  value: unknown,
+  fallback: keyof T,
+): T[keyof T] {
+  return typeof value === "string" && value in table
+    ? table[value as keyof T]
+    : table[fallback]
+}
+
+const palette = chosen(PALETTES, context.settings.palette, "forest")
+const contentWidth = chosen(WIDTHS, context.settings["content-width"], "regular")
+
+const requestedAccent = context.settings["accent-color"]
+const accent =
+  typeof requestedAccent === "string" &&
+  /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(requestedAccent.trim())
+    ? requestedAccent.trim()
+    : palette.accent
+---
+
+<!doctype html>
+<html lang={context.locale}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" href="/favicon.ico" />
+    <title>{documentTitle}</title>
+    {metadataDescription && (
+      <meta name="description" content={metadataDescription} />
+    )}
+    {context.seo.noIndex && <meta name="robots" content="noindex, nofollow" />}
+    {openGraphTitle && <meta property="og:title" content={openGraphTitle} />}
+    {openGraphDescription && (
+      <meta property="og:description" content={openGraphDescription} />
+    )}
+    {context.openGraph?.image && (
+      <meta property="og:image" content={context.openGraph.image.src} />
+    )}
+    {openGraphImageAlt && <meta property="og:image:alt" content={openGraphImageAlt} />}
+    {context.openGraph?.image?.width && (
+      <meta
+        property="og:image:width"
+        content={String(context.openGraph.image.width)}
+      />
+    )}
+    {context.openGraph?.image?.height && (
+      <meta
+        property="og:image:height"
+        content={String(context.openGraph.image.height)}
+      />
+    )}
+  </head>
+  <body
+    style={`--page-background:${palette.background};--page-text:${palette.text};--page-accent:${accent};--content-width:${contentWidth}`}
+  >
+    <header class="navigation-rail">
+      <div>
+        <a class="wordmark" href="/">{context.site.name}</a>
+        <p class="position">44.18° N · Black Sea</p>
+      </div>
+      <nav>
+        {
+          context.navigation.map((item) => (
+            <a href={item.href}>{item.label}</a>
+          ))
+        }
+      </nav>
+      <p class="rail-note">Journeys assembled live by Voyant</p>
+    </header>
+    <main class:list={{ "authored-home": authoredHome }}>
+      <slot />
+    </main>
+    <footer>
+      <span>{context.site.name}</span>
+      <span>One itinerary · one presentation currency</span>
+    </footer>
+  </body>
+</html>
+
+<style>
+  :global(*) { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    width: 100%;
+    min-height: 100%;
+    font-family: "Arial Narrow", "Helvetica Neue", sans-serif;
+    line-height: 1.45;
+    background: var(--page-background, #07151f);
+    color: var(--page-text, #eef8fb);
+  }
+  .navigation-rail {
+    background: color-mix(in srgb, var(--page-background) 88%, black);
+    border-right: 1px solid color-mix(in srgb, var(--page-text) 18%, transparent);
+    display: flex;
+    flex-direction: column;
+    inset: 0 auto 0 0;
+    justify-content: space-between;
+    padding: 2rem 1.35rem;
+    position: fixed;
+    width: 13.5rem;
+    z-index: 2;
+  }
+  .wordmark {
+    color: var(--page-text);
+    font-size: 1.35rem;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    text-decoration: none;
+  }
+  .position, .rail-note { color: color-mix(in srgb, var(--page-text) 56%, transparent); font-size: 0.64rem; letter-spacing: 0.12em; text-transform: uppercase; }
+  nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  nav a {
+    border-top: 1px solid color-mix(in srgb, var(--page-text) 16%, transparent);
+    color: inherit;
+    font-size: 0.74rem;
+    letter-spacing: 0.1em;
+    padding: 0.75rem 0;
+    text-decoration: none;
+    text-transform: uppercase;
+  }
+  nav a:last-child { border-bottom: 1px solid color-mix(in srgb, var(--page-text) 16%, transparent); }
+  nav a:hover { color: var(--page-accent); padding-left: 0.35rem; }
+  main {
+    margin-left: 13.5rem;
+    max-width: calc(var(--content-width, 60rem) + 13.5rem);
+    min-height: calc(100vh - 4rem);
+    padding: 4rem clamp(1.5rem, 5vw, 5rem);
+  }
+  main.authored-home {
+    margin-left: 13.5rem;
+    max-width: none;
+    padding: 0;
+  }
+  main :global(a) {
+    color: var(--page-accent, #63d5e8);
+  }
+  footer { border-top: 1px solid color-mix(in srgb, var(--page-text) 16%, transparent); color: color-mix(in srgb, var(--page-text) 60%, transparent); display: flex; font-size: 0.65rem; justify-content: space-between; letter-spacing: 0.09em; margin-left: 13.5rem; padding: 1.25rem clamp(1.5rem, 5vw, 5rem); text-transform: uppercase; }
+  @media (max-width: 760px) {
+    .navigation-rail { border-bottom: 1px solid color-mix(in srgb, var(--page-text) 18%, transparent); border-right: 0; gap: 1rem; inset: auto; padding: 1rem 1.25rem; position: relative; width: auto; }
+    .navigation-rail nav { flex-direction: row; flex-wrap: wrap; gap: 0.8rem; }
+    .navigation-rail nav a, .navigation-rail nav a:last-child { border: 0; padding: 0; }
+    .rail-note { display: none; }
+    main, main.authored-home, footer { margin-left: 0; }
+    main { padding: 2.5rem 1.25rem; }
+  }
+</style>

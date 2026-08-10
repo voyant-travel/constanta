@@ -1,0 +1,167 @@
+---
+import {
+  attributeSetting,
+  choiceSetting,
+  imageSetting,
+  linkSetting,
+  numberSetting,
+  visibleSetting,
+  type SectionInstance,
+} from "../../lib/sections"
+
+interface Props {
+  section: SectionInstance
+}
+
+const { section } = Astro.props
+const settings = section.data.settings
+const eyebrow = visibleSetting(settings, "eyebrow")
+const heading = visibleSetting(settings, "heading")
+const body = visibleSetting(settings, "body")
+const image = imageSetting(settings, "image")
+const imageAlt = attributeSetting(settings, "image-alt") ?? ""
+const alignment = choiceSetting(settings, "alignment", ["left", "center"], "left")
+const colorScheme = choiceSetting(
+  settings,
+  "color-scheme",
+  ["light", "dark"],
+  "light",
+)
+const height = numberSetting(settings, "height", 360, 720, 520)
+const links = section.data.blocks.filter((block) => block.type === "link")
+---
+
+<section
+  class:list={[
+    "hero",
+    `align-${alignment}`,
+    `scheme-${colorScheme}`,
+    { "has-image": image },
+  ]}
+  style={`--hero-min-height:${height}px`}
+>
+  <div class="hero-copy">
+    {eyebrow && <p class="eyebrow">{eyebrow}</p>}
+    {heading && <h1 set:html={heading} />}
+    {body && <div class="hero-body" set:html={body} />}
+    {
+      links.length > 0 && (
+        <div class="hero-links">
+          {links.map((block) => {
+            const label = visibleSetting(block.settings, "label")
+            const href = linkSetting(block.settings, "page")
+            const style = choiceSetting(
+              block.settings,
+              "style",
+              ["solid", "outline"],
+              "solid",
+            )
+            return label && href ? (
+              <a class:list={["button", `button-${style}`]} href={href}>
+                {label}
+              </a>
+            ) : null
+          })}
+        </div>
+      )
+    }
+  </div>
+  {image && <img src={image} alt={imageAlt} width="1200" height="900" />}
+</section>
+
+<style>
+  .hero {
+    min-height: var(--hero-min-height, 520px);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    place-items: center;
+    padding: clamp(4rem, 10vw, 8rem) max(2rem, calc((100vw - 72rem) / 2));
+    background:
+      radial-gradient(circle at 85% 10%, rgb(255 255 255 / 70%), transparent 34%),
+      #edf2ed;
+  }
+  .hero.has-image {
+    grid-template-columns: minmax(0, 1fr) minmax(18rem, 0.8fr);
+    gap: clamp(2.5rem, 6vw, 6rem);
+  }
+  .hero.scheme-dark {
+    background: #17332a;
+    color: #f5f2e9;
+  }
+  .hero-copy {
+    width: min(100%, 42rem);
+  }
+  .align-center .hero-copy {
+    text-align: center;
+    margin-inline: auto;
+  }
+  .eyebrow {
+    margin: 0 0 1rem;
+    color: var(--page-accent, #0b3d2e);
+    font-size: 0.76rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  .scheme-dark .eyebrow {
+    color: #b9d5c5;
+  }
+  h1 {
+    margin: 0;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: clamp(3rem, 7vw, 6.5rem);
+    font-weight: 400;
+    letter-spacing: -0.045em;
+    line-height: 0.98;
+  }
+  .hero-body {
+    margin-top: 1.75rem;
+    font-size: clamp(1.05rem, 1.8vw, 1.28rem);
+    color: color-mix(in srgb, currentColor 76%, transparent);
+  }
+  .hero-body :global(p) {
+    margin: 0;
+  }
+  .hero-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 2rem;
+  }
+  .align-center .hero-links {
+    justify-content: center;
+  }
+  .button {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.8rem;
+    padding: 0 1.15rem;
+    border: 1px solid currentColor;
+    border-radius: 999px;
+    font-weight: 650;
+    text-decoration: none;
+  }
+  .button-solid {
+    border-color: var(--page-accent, #0b3d2e);
+    background: var(--page-accent, #0b3d2e);
+    color: white;
+  }
+  .scheme-dark .button-solid {
+    border-color: #f5f2e9;
+    background: #f5f2e9;
+    color: #17332a;
+  }
+  img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    border-radius: 0.75rem;
+    box-shadow: 0 2rem 5rem rgb(14 43 31 / 18%);
+  }
+  @media (max-width: 760px) {
+    .hero.has-image {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

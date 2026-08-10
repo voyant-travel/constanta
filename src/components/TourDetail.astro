@@ -1,0 +1,206 @@
+---
+import type { TourDetailContext } from "@voyant-travel/theme"
+import { availableCapability } from "../lib/tour-capabilities"
+import BookingJourney from "./BookingJourney.astro"
+
+interface Props {
+  context: TourDetailContext
+}
+
+const { context } = Astro.props
+const { product } = context
+const availability = availableCapability(context.live, "catalog.availability.v1")
+const pricing = availableCapability(context.live, "catalog.pricing.v1")
+const booking = availableCapability(context.live, "booking.session.v1")
+const checkout = availableCapability(context.live, "checkout.v1")
+---
+
+<article class="tour-detail">
+  <p class="eyebrow">Route dossier · {
+    product.destinations.map((destination) => destination.name).join(" · ") || "Tour"}
+  </p>
+  <h1>{product.name}</h1>
+  {product.shortDescription && <p class="lede">{product.shortDescription}</p>}
+
+  <dl class="facts">
+    <div><dt>Format</dt><dd>{product.bookingMode.replaceAll("_", " ")}</dd></div>
+    <div><dt>Capacity</dt><dd>{product.capacityMode.replaceAll("_", " ")}</dd></div>
+    {product.categories.length > 0 && (
+      <div><dt>Style</dt><dd>{product.categories.map((item) => item.name).join(", ")}</dd></div>
+    )}
+  </dl>
+
+  {product.descriptionHtml && (
+    <section class="prose" set:html={product.descriptionHtml} />
+  )}
+
+  {product.features.length > 0 && (
+    <section>
+      <h2>What makes it special</h2>
+      <ul class="features">
+        {product.features.map((feature) => (
+          <li>
+            <h3>{feature.title}</h3>
+            {feature.description && <p>{feature.description}</p>}
+          </li>
+        ))}
+      </ul>
+    </section>
+  )}
+
+  {product.itinerary && (
+    <section>
+      <h2>{product.itinerary.name}</h2>
+      <ol class="itinerary">
+        {product.itinerary.days.map((day) => (
+          <li>
+            <p class="eyebrow">Day {day.dayNumber}</p>
+            {day.title && <h3>{day.title}</h3>}
+            {day.description && <p>{day.description}</p>}
+          </li>
+        ))}
+      </ol>
+    </section>
+  )}
+
+  {(availability || pricing) && (
+    <section
+      class="live-card"
+      data-tour-live
+      data-product-id={product.id}
+      data-locale={context.locale}
+      data-availability-endpoint={availability?.endpoint}
+      data-pricing-endpoint={pricing?.endpoint}
+    >
+      <p class="eyebrow">Live selling</p>
+      <h2>Dates and price</h2>
+      <p>Availability and pricing are checked live and are never copied into the published page.</p>
+      <div class="actions">
+        {availability && <button type="button" data-load-availability>Check dates</button>}
+        {pricing && <button type="button" class="secondary" data-load-pricing>Preview price</button>}
+      </div>
+      <p data-live-status aria-live="polite"></p>
+      <div data-live-result></div>
+    </section>
+  )}
+
+  {booking && (
+    <BookingJourney
+      productId={product.id}
+      locale={context.locale}
+      bookingEndpoint={booking.endpoint}
+      checkoutEndpoint={checkout?.endpoint}
+    />
+  )}
+
+  <p class="back"><a href="/tours">Back to all tours</a></p>
+</article>
+
+<script>
+  import { responseRows, rowText } from "../lib/tour-capabilities"
+
+  const card = document.querySelector("[data-tour-live]")
+  if (card instanceof HTMLElement) {
+    const status = card.querySelector("[data-live-status]")
+    const result = card.querySelector("[data-live-result]")
+    const productId = card.dataset.productId
+    const locale = card.dataset.locale ?? "en"
+
+    const request = async (endpoint, body) => {
+      if (!(status instanceof HTMLElement) || !(result instanceof HTMLElement) || !endpoint || !productId) return
+      status.textContent = "Checking live inventory…"
+      result.replaceChildren()
+      try {
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: { Accept: "application/json", "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        })
+        const payload = await response.json().catch(() => null)
+        if (!response.ok) {
+          const message = payload && typeof payload.error === "string" ? payload.error : `Request failed (${response.status})`
+          throw new Error(message.replaceAll("_", " "))
+        }
+        status.textContent = "Live information updated."
+        return payload
+      } catch (error) {
+        status.textContent = error instanceof Error ? error.message : "Live selling is temporarily unavailable."
+      }
+    }
+
+    card.querySelector("[data-load-availability]")?.addEventListener("click", async () => {
+      const payload = await request(card.dataset.availabilityEndpoint, { productId, locale })
+      if (!payload || !(result instanceof HTMLElement)) return
+      const rows = responseRows(payload)
+      if (rows.length === 0) {
+        result.textContent = "No bookable dates are currently available."
+        return
+      }
+      const list = document.createElement("ul")
+      list.className = "live-options"
+      for (const row of rows) {
+        const item = document.createElement("li")
+        const date = rowText(row, "startsAt", "dateLocal", "startDate") ?? "Date to be confirmed"
+        const remaining = typeof row.remainingPax === "number" ? `${row.remainingPax} places` : undefined
+        const copy = document.createElement("span")
+        copy.textContent = remaining ? `${date} · ${remaining}` : date
+        item.append(copy)
+        const departureSlotId = rowText(row, "id", "slotId", "departureSlotId")
+        if (departureSlotId) {
+          const choose = document.createElement("button")
+          choose.type = "button"
+          choose.className = "secondary choose-date"
+          choose.textContent = "Choose"
+          choose.addEventListener("click", () => {
+            document.dispatchEvent(new CustomEvent("voyant:departure-selected", { detail: { departureSlotId } }))
+          })
+          item.append(choose)
+        }
+        list.append(item)
+      }
+      result.append(list)
+    })
+
+    card.querySelector("[data-load-pricing]")?.addEventListener("click", async () => {
+      const payload = await request(card.dataset.pricingEndpoint, {
+        target: { kind: "product", productId },
+        scope: { locale, market: "default" },
+      })
+      if (!payload || !(result instanceof HTMLElement)) return
+      const preview = payload.kind === "offer_preview" ? payload.preview : payload
+      if (preview?.available !== true || !preview.pricing) {
+        result.textContent = "Choose a date and party to receive a price."
+        return
+      }
+      const pre = document.createElement("pre")
+      pre.textContent = JSON.stringify(preview.pricing, null, 2)
+      result.append(pre)
+    })
+  }
+</script>
+
+<style>
+  .tour-detail { max-width: 72rem; }
+  .tour-detail > h1 { font-size: clamp(3.5rem, 10vw, 8rem); font-weight: 800; letter-spacing: -0.07em; line-height: 0.8; margin: 0.6rem 0 2rem; max-width: 10ch; text-transform: uppercase; }
+  .eyebrow { color: var(--page-accent); font-size: 0.68rem; letter-spacing: 0.16em; margin: 0; text-transform: uppercase; }
+  .lede { border-left: 4px solid var(--page-accent); font-size: 1.25rem; max-width: 40rem; padding-left: 1rem; }
+  .facts { border-block: 1px solid color-mix(in srgb, var(--page-text) 25%, transparent); display: grid; gap: 0; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); margin: 3rem 0; }
+  .facts div { border-right: 1px solid color-mix(in srgb, var(--page-text) 20%, transparent); display: grid; gap: 0.4rem; padding: 1.25rem; }
+  dt { color: var(--page-accent); font-size: 0.65rem; letter-spacing: 0.12em; text-transform: uppercase; }
+  dd { margin: 0; text-transform: capitalize; }
+  section { margin: 3.5rem 0; }
+  .features, .itinerary { display: grid; gap: 0; list-style: none; padding: 0; }
+  .features li, .itinerary li { border-left: 1px solid color-mix(in srgb, var(--page-text) 25%, transparent); border-top: 1px solid color-mix(in srgb, var(--page-text) 25%, transparent); padding: 1.25rem; }
+  .features { grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); }
+  .itinerary { grid-auto-columns: minmax(15rem, 1fr); grid-auto-flow: column; overflow-x: auto; }
+  .features h3, .itinerary h3 { margin: 0.3rem 0; }
+  .live-card { background: var(--page-accent); color: var(--page-background); padding: 1.5rem; }
+  .live-card h2 { margin: 0.35rem 0; }
+  .actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1.25rem; }
+  button { background: var(--page-background); border: 1px solid var(--page-background); color: var(--page-text); cursor: pointer; font: inherit; font-weight: 750; padding: 0.7rem 1rem; }
+  button.secondary { background: transparent; color: var(--page-background); }
+  :global(.live-options li) { align-items: center; display: flex; gap: 0.75rem; justify-content: space-between; }
+  :global(.live-options .choose-date) { padding: 0.4rem 0.65rem; }
+  pre { background: var(--page-background); max-width: 100%; overflow: auto; padding: 1rem; }
+  .back { margin-top: 4rem; }
+</style>
